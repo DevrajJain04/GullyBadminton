@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 import '../providers/group_provider.dart';
 import '../providers/match_provider.dart';
 import '../providers/player_provider.dart';
-import '../providers/auth_provider.dart';
 import '../widgets/match_card.dart';
 
 class GroupDashboardScreen extends StatefulWidget {
@@ -15,228 +15,306 @@ class GroupDashboardScreen extends StatefulWidget {
 
 class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final group = context.read<GroupProvider>().currentGroup;
-      if (group != null) {
-        context.read<MatchProvider>().loadMatches(group.id);
-        context.read<MatchProvider>().connectWebSocket(group.id);
-        context.read<PlayerProvider>().loadPlayers(group.id);
-      }
-    });
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final group = context.read<GroupProvider>().selectedGroup;
+    if (group != null) {
+      context.read<MatchProvider>().loadMatches(group.id);
+      context.read<MatchProvider>().connectWebSocket(group.id);
+      context.read<PlayerProvider>().loadPlayers(group.id);
+    }
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final group = context.watch<GroupProvider>().currentGroup;
-    final matchProv = context.watch<MatchProvider>();
+    final group = context.watch<GroupProvider>().selectedGroup;
+    final matchProvider = context.watch<MatchProvider>();
+    final auth = context.watch<AuthProvider>();
+    final isCreator = group?.createdBy == auth.user?.id;
 
     if (group == null) {
       return const Scaffold(body: Center(child: Text('No group selected')));
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
       appBar: AppBar(
         title: Text(group.name),
-        backgroundColor: const Color(0xFF16213E),
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.people),
-            tooltip: 'Players',
             onPressed: () => Navigator.pushNamed(context, '/players'),
           ),
           IconButton(
             icon: const Icon(Icons.history),
-            tooltip: 'Match History',
-            onPressed: () => Navigator.pushNamed(context, '/history'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              context.read<MatchProvider>().disconnectWebSocket();
-              context.read<AuthProvider>().logout();
-              Navigator.pushReplacementNamed(context, '/login');
-            },
+            onPressed: () => Navigator.pushNamed(context, '/match-history'),
           ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () async {
-          await matchProv.loadMatches(group.id);
-        },
+        onRefresh: () => matchProvider.loadMatches(group.id),
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
             // Join code card
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF0F3460), Color(0xFF533483)],
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Join Code',
+                            style: Theme.of(context).textTheme.labelMedium),
+                        Text(group.joinCode,
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    Text('${group.members.length} members',
+                        style: Theme.of(context).textTheme.bodySmall),
+                  ],
                 ),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.vpn_key, color: Color(0xFF00D9FF), size: 28),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Join Code', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                      Text(
-                        group.joinCode,
-                        style: const TextStyle(
-                          color: Color(0xFF00D9FF),
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
               ),
             ),
-            const SizedBox(height: 24),
+
+            const SizedBox(height: 16),
 
             // Live matches
-            const Text('🔴 Live Matches', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            if (matchProv.liveMatches.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Center(
-                  child: Text('No live matches', style: TextStyle(color: Colors.white54)),
-                ),
-              )
-            else
-              ...matchProv.liveMatches.map((m) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: MatchCard(
-                      match: m,
-                      onTap: () {
-                        matchProv.setCurrentMatch(m);
-                        Navigator.pushNamed(context, '/live');
-                      },
-                    ),
+            if (matchProvider.liveMatches.isNotEmpty) ...[
+              Text('🔴 Live Matches',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              ...matchProvider.liveMatches.map((m) => MatchCard(
+                    match: m,
+                    isCreator: isCreator,
+                    onTap: () {
+                      matchProvider.setCurrentMatch(m);
+                      Navigator.pushNamed(context, '/live-match');
+                    },
                   )),
+              const SizedBox(height: 16),
+            ],
 
-            const SizedBox(height: 24),
-            // Recent finished
-            const Text('📋 Recent Matches', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            if (matchProv.finishedMatches.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Center(
-                  child: Text('No finished matches yet', style: TextStyle(color: Colors.white54)),
-                ),
-              )
-            else
-              ...matchProv.finishedMatches.take(5).map((m) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: MatchCard(match: m),
+            // Recent finished matches
+            if (matchProvider.finishedMatches.isNotEmpty) ...[
+              Text('Recent Matches',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              ...matchProvider.finishedMatches.take(5).map((m) => MatchCard(
+                    match: m,
+                    isCreator: isCreator,
+                    onTap: () {
+                      matchProvider.setCurrentMatch(m);
+                      Navigator.pushNamed(context, '/live-match');
+                    },
                   )),
+            ],
+
+            if (matchProvider.loading)
+              const Center(child: CircularProgressIndicator()),
+
+            if (!matchProvider.loading &&
+                matchProvider.matches.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Text('No matches yet. Start one!',
+                      textAlign: TextAlign.center),
+                ),
+              ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF00D9FF),
-        foregroundColor: const Color(0xFF1A1A2E),
-        icon: const Icon(Icons.add),
-        label: const Text('New Match'),
-        onPressed: () => _showNewMatchDialog(context, group.id),
-      ),
+      floatingActionButton: isCreator
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.extended(
+                  heroTag: 'new_match',
+                  onPressed: () => _showNewMatchDialog(context),
+                  icon: const Icon(Icons.sports),
+                  label: const Text('New Match'),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  heroTag: 'add_result',
+                  onPressed: () => Navigator.pushNamed(context, '/add-result'),
+                  child: const Icon(Icons.add_chart),
+                ),
+              ],
+            )
+          : null,
     );
   }
 
-  void _showNewMatchDialog(BuildContext context, String groupId) {
+  void _showNewMatchDialog(BuildContext context) {
     final players = context.read<PlayerProvider>().players;
-    if (players.length < 2) {
+    if (players.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Need at least 2 players. Add players first!')),
-      );
+          const SnackBar(content: Text('Add players first')));
       return;
     }
 
-    String? p1Id, p2Id;
+    // State for team building
+    String? t1p1, t1p2, t2p1, t2p2;
+    bool t1HasPartner = false;
+    bool t2HasPartner = false;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: const Color(0xFF16213E),
-          title: const Text('New Match', style: TextStyle(color: Colors.white)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                dropdownColor: const Color(0xFF16213E),
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Player 1',
-                  labelStyle: TextStyle(color: Colors.white70),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                ),
-                items: players
-                    .map((p) => DropdownMenuItem(value: p.id, child: Text(p.name)))
-                    .toList(),
-                onChanged: (v) => setDialogState(() => p1Id = v),
+        builder: (ctx, setDialogState) {
+          // Get all currently selected IDs to exclude from other dropdowns
+          final selectedIds = [t1p1, t1p2, t2p1, t2p2]
+              .where((e) => e != null)
+              .toSet();
+
+          Widget playerDropdown(String label, String? value,
+              ValueChanged<String?> onChanged) {
+            final availablePlayers = players.where(
+                (p) => value == p.id || !selectedIds.contains(p.id)).toList();
+            return DropdownButtonFormField<String>(
+              initialValue: value,
+              decoration: InputDecoration(
+                labelText: label,
+                border: const OutlineInputBorder(),
+                isDense: true,
               ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                dropdownColor: const Color(0xFF16213E),
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Player 2',
-                  labelStyle: TextStyle(color: Colors.white70),
-                  enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                ),
-                items: players
-                    .map((p) => DropdownMenuItem(value: p.id, child: Text(p.name)))
-                    .toList(),
-                onChanged: (v) => setDialogState(() => p2Id = v),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('Select...')),
+                ...availablePlayers.map((p) => DropdownMenuItem(
+                      value: p.id,
+                      child: Text(p.name),
+                    )),
+              ],
+              onChanged: (v) {
+                onChanged(v);
+                setDialogState(() {});
+              },
+            );
+          }
+
+          return AlertDialog(
+            title: const Text('New Match'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Team 1
+                  Text('Team 1',
+                      style: Theme.of(ctx).textTheme.titleSmall),
+                  const SizedBox(height: 8),
+                  playerDropdown('Player 1', t1p1, (v) => t1p1 = v),
+                  if (t1HasPartner) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: playerDropdown(
+                              'Partner', t1p2, (v) => t1p2 = v),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () => setDialogState(() {
+                            t1HasPartner = false;
+                            t1p2 = null;
+                          }),
+                        ),
+                      ],
+                    ),
+                  ] else
+                    TextButton.icon(
+                      onPressed: () => setDialogState(() {
+                        t1HasPartner = true;
+                      }),
+                      icon: const Icon(Icons.person_add, size: 16),
+                      label: const Text('Add Partner'),
+                    ),
+
+                  const Divider(height: 24),
+
+                  // Team 2
+                  Text('Team 2',
+                      style: Theme.of(ctx).textTheme.titleSmall),
+                  const SizedBox(height: 8),
+                  playerDropdown('Player 1', t2p1, (v) => t2p1 = v),
+                  if (t2HasPartner) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: playerDropdown(
+                              'Partner', t2p2, (v) => t2p2 = v),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () => setDialogState(() {
+                            t2HasPartner = false;
+                            t2p2 = null;
+                          }),
+                        ),
+                      ],
+                    ),
+                  ] else
+                    TextButton.icon(
+                      onPressed: () => setDialogState(() {
+                        t2HasPartner = true;
+                      }),
+                      icon: const Icon(Icons.person_add, size: 16),
+                      label: const Text('Add Partner'),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (t1p1 == null || t2p1 == null) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                        content: Text('Select at least 1 player per team')));
+                    return;
+                  }
+                  final team1 = [t1p1!, ?t1p2];
+                  final team2 = [t2p1!, ?t2p2];
+                  final group =
+                      ctx.read<GroupProvider>().selectedGroup!;
+                  final dialogNav = Navigator.of(ctx);
+                  final screenNav = Navigator.of(context);
+                  final matchProv = ctx.read<MatchProvider>();
+                  matchProv
+                      .createMatch(group.id, team1, team2)
+                      .then((success) {
+                    if (success) {
+                      dialogNav.pop();
+                      screenNav.pushNamed('/live-match');
+                    }
+                  });
+                },
+                child: const Text('Start'),
               ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00D9FF)),
-              onPressed: () async {
-                if (p1Id == null || p2Id == null || p1Id == p2Id) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Select two different players')),
-                  );
-                  return;
-                }
-                final nav = Navigator.of(context);
-                final matchProv = context.read<MatchProvider>();
-                Navigator.pop(ctx);
-                final success = await matchProv.createMatch(groupId, p1Id!, p2Id!);
-                if (success && mounted) {
-                  nav.pushNamed('/live');
-                }
-              },
-              child: const Text('Start Match'),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

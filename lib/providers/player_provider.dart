@@ -54,4 +54,16 @@ class PlayerProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  Future<bool> deletePlayer(String groupId, String playerId) async {
+    try {
+      final data = await _api.deletePlayer(groupId, playerId);
+      if (data.containsKey('error')) return false;
+      _players.removeWhere((p) => p.id == playerId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
 }

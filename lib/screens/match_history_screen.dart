@@ -8,27 +8,26 @@ class MatchHistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final matchProv = context.watch<MatchProvider>();
-    final finished = matchProv.finishedMatches;
+    final matchProvider = context.watch<MatchProvider>();
+    final finished = matchProvider.finishedMatches;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
-      appBar: AppBar(
-        title: const Text('Match History'),
-        backgroundColor: const Color(0xFF16213E),
-        foregroundColor: Colors.white,
-      ),
+      appBar: AppBar(title: const Text('Match History')),
       body: finished.isEmpty
-          ? const Center(
-              child: Text('No finished matches yet', style: TextStyle(color: Colors.white54, fontSize: 16)),
-            )
+          ? const Center(child: Text('No finished matches yet'))
           : ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: finished.length,
-              itemBuilder: (_, i) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: MatchCard(match: finished[i]),
-              ),
+              itemBuilder: (context, index) {
+                final match = finished[index];
+                return MatchCard(
+                  match: match,
+                  onTap: () {
+                    matchProvider.setCurrentMatch(match);
+                    Navigator.pushNamed(context, '/live-match');
+                  },
+                );
+              },
             ),
     );
   }

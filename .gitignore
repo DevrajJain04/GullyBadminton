@@ -7,6 +7,7 @@ build/
 *.js.deps
 *.js.map
 
+*.txt
 # IDE
 .idea/
 *.iml

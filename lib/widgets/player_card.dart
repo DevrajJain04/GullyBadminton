@@ -3,8 +3,9 @@ import '../models/player.dart';
 
 class PlayerCard extends StatelessWidget {
   final Player player;
+  final Widget? trailing;
 
-  const PlayerCard({super.key, required this.player});
+  const PlayerCard({super.key, required this.player, this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -25,10 +26,13 @@ class PlayerCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
-          Text(
-            player.name,
-            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
+          Expanded(
+            child: Text(
+              player.name,
+              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
+            ),
           ),
+          ?trailing,
         ],
       ),
     );

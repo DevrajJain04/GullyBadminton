@@ -3,6 +3,7 @@ class Group {
   final String name;
   final String joinCode;
   final String createdBy;
+  final List<String> members;
   final String? createdAt;
 
   Group({
@@ -10,6 +11,7 @@ class Group {
     required this.name,
     required this.joinCode,
     required this.createdBy,
+    required this.members,
     this.createdAt,
   });
 
@@ -19,6 +21,8 @@ class Group {
       name: json['name'] ?? '',
       joinCode: json['join_code'] ?? '',
       createdBy: json['created_by'] ?? '',
+      members: List<String>.from(
+          (json['members'] as List<dynamic>?)?.map((e) => e.toString()) ?? []),
       createdAt: json['created_at'],
     );
   }
@@ -28,6 +32,7 @@ class Group {
         'name': name,
         'join_code': joinCode,
         'created_by': createdBy,
+        'members': members,
         'created_at': createdAt,
       };
 }

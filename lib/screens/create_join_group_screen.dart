@@ -170,7 +170,7 @@ class _CreateJoinGroupScreenState extends State<CreateJoinGroupScreen>
               TextButton(
                 onPressed: () {
                   Navigator.pop(context);
-                  Navigator.pushReplacementNamed(context, '/dashboard');
+                  Navigator.pushReplacementNamed(context, '/group');
                 },
                 child: const Text('Go to Dashboard', style: TextStyle(color: Color(0xFF00D9FF))),
               ),
@@ -185,7 +185,7 @@ class _CreateJoinGroupScreenState extends State<CreateJoinGroupScreen>
     if (_codeCtrl.text.trim().isEmpty) return;
     final success = await context.read<GroupProvider>().joinGroup(_codeCtrl.text.trim());
     if (success && mounted) {
-      Navigator.pushReplacementNamed(context, '/dashboard');
+      Navigator.pushReplacementNamed(context, '/group');
     }
   }
 }
