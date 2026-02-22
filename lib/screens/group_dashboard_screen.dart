@@ -7,6 +7,7 @@ import '../providers/player_provider.dart';
 import '../widgets/match_card.dart';
 import '../widgets/leaderboard_tab.dart';
 import '../widgets/players_tab.dart';
+import '../models/match.dart';
 
 class GroupDashboardScreen extends StatefulWidget {
   const GroupDashboardScreen({super.key});
@@ -18,6 +19,19 @@ class GroupDashboardScreen extends StatefulWidget {
 class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
   bool _loaded = false;
   int _tabIndex = 0;
+  DateTimeRange? _dateRange;
+
+  List<Match> _filteredMatches(List<Match> matches) {
+    if (_dateRange == null) return matches;
+    return matches.where((m) {
+      if (m.createdAt == null) return true;
+      final dt = DateTime.tryParse(m.createdAt!);
+      if (dt == null) return true;
+      final start = _dateRange!.start;
+      final end = _dateRange!.end.add(const Duration(days: 1));
+      return dt.isAfter(start) && dt.isBefore(end);
+    }).toList();
+  }
 
   @override
   void didChangeDependencies() {
@@ -41,7 +55,9 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
     final matchProvider = context.watch<MatchProvider>();
     final playerProvider = context.watch<PlayerProvider>();
     final auth = context.watch<AuthProvider>();
-    final isCreator = group?.createdBy == auth.user?.id;
+    final userId = auth.user?.id;
+    final isCreator = group?.createdBy == userId;
+    final isAdmin = isCreator || (group?.admins.contains(userId) ?? false);
 
     if (group == null) {
       return const Scaffold(body: Center(child: Text('No group selected')));
@@ -74,22 +90,48 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
               ],
             ),
           ),
+          IconButton(
+            icon: Icon(
+              _dateRange == null ? Icons.calendar_today : Icons.event_available,
+              color: _dateRange == null ? Colors.white54 : const Color(0xFF00D9FF),
+            ),
+            tooltip: 'Filter by date',
+            onPressed: () async {
+              final picked = await showDateRangePicker(
+                context: context,
+                firstDate: DateTime(2020),
+                lastDate: DateTime.now().add(const Duration(days: 365)),
+                initialDateRange: _dateRange,
+              );
+              if (picked != null) {
+                setState(() => _dateRange = picked);
+              }
+            },
+          ),
+          if (_dateRange != null)
+            IconButton(
+              icon: const Icon(Icons.clear, color: Colors.white54),
+              tooltip: 'Clear filter',
+              onPressed: () => setState(() => _dateRange = null),
+            ),
         ],
       ),
       body: IndexedStack(
         index: _tabIndex,
         children: [
           // ── Tab 0: Matches ──
-          _matchesTab(context, matchProvider, isCreator, group.id),
+          _matchesTab(context, matchProvider, isAdmin, group.id),
 
           // ── Tab 1: Leaderboard ──
           LeaderboardTab(
-            matches: matchProvider.matches,
+            matches: _filteredMatches(matchProvider.matches),
             players: playerProvider.players,
           ),
 
           // ── Tab 2: Players ──
-          const PlayersTab(),
+          PlayersTab(
+            matches: _filteredMatches(matchProvider.matches),
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -131,7 +173,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
           ),
         ],
       ),
-      floatingActionButton: _tabIndex == 0 && isCreator
+      floatingActionButton: _tabIndex == 0 && isAdmin
           ? Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -156,7 +198,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 
   // ── Matches Tab Content ──
   Widget _matchesTab(BuildContext context, MatchProvider matchProvider,
-      bool isCreator, String groupId) {
+      bool isAdmin, String groupId) {
     return RefreshIndicator(
       onRefresh: () => matchProvider.loadMatches(groupId),
       child: ListView(
@@ -168,7 +210,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
             const SizedBox(height: 8),
             ...matchProvider.liveMatches.map((m) => MatchCard(
                   match: m,
-                  isCreator: isCreator,
+                  isAdmin: isAdmin,
                   onTap: () {
                     matchProvider.setCurrentMatch(m);
                     Navigator.pushNamed(context, '/live-match');
@@ -177,24 +219,13 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
             const SizedBox(height: 16),
           ],
 
-          // Recent finished
-          if (matchProvider.finishedMatches.isNotEmpty) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _sectionHeader(context, 'Recent Matches'),
-                TextButton(
-                  onPressed: () =>
-                      Navigator.pushNamed(context, '/match-history'),
-                  child: const Text('See all',
-                      style: TextStyle(fontSize: 12)),
-                ),
-              ],
-            ),
+          // Finished Matches
+          if (_filteredMatches(matchProvider.finishedMatches).isNotEmpty) ...[
+            _sectionHeader(context, 'Finished Matches'),
             const SizedBox(height: 8),
-            ...matchProvider.finishedMatches.take(5).map((m) => MatchCard(
+            ..._filteredMatches(matchProvider.finishedMatches).map((m) => MatchCard(
                   match: m,
-                  isCreator: isCreator,
+                  isAdmin: isAdmin,
                   onTap: () {
                     matchProvider.setCurrentMatch(m);
                     Navigator.pushNamed(context, '/live-match');

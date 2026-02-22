@@ -106,4 +106,48 @@ class GroupProvider extends ChangeNotifier {
     _currentGroup = group;
     notifyListeners();
   }
+
+  Future<bool> addAdmin(String groupId, String userId) async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final data = await _api.addAdmin(groupId, userId);
+      if (data.containsKey('error')) {
+        _error = data['error'];
+        _loading = false;
+        notifyListeners();
+        return false;
+      }
+      await loadGroup(groupId);
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> removeAdmin(String groupId, String userId) async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final data = await _api.removeAdmin(groupId, userId);
+      if (data.containsKey('error')) {
+        _error = data['error'];
+        _loading = false;
+        notifyListeners();
+        return false;
+      }
+      await loadGroup(groupId);
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
+  }
 }

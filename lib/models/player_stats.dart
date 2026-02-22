@@ -1,6 +1,16 @@
 import 'match.dart';
 import 'player.dart';
 
+class HeadToHead {
+  final String opponentId;
+  final String opponentName;
+  int matchesPlayed = 0;
+  int wins = 0;
+  int losses = 0;
+
+  HeadToHead({required this.opponentId, required this.opponentName});
+}
+
 class PlayerStats {
   final String playerId;
   final String playerName;
@@ -10,6 +20,7 @@ class PlayerStats {
   int totalPoints = 0;
   int currentStreak = 0; // positive = wins, negative = losses
   int bestStreak = 0;
+  final Map<String, HeadToHead> vsStats = {};
 
   PlayerStats({required this.playerId, required this.playerName});
 
@@ -99,6 +110,36 @@ Map<String, PlayerStats> computeAllStats(
       }
       if (s.currentStreak > s.bestStreak) {
         s.bestStreak = s.currentStreak;
+      }
+    }
+
+    // Update head-to-head stats
+    for (final p1 in m.team1Ids) {
+      if (!stats.containsKey(p1)) continue;
+      for (final p2 in m.team2Ids) {
+        if (!stats.containsKey(p2)) continue;
+        
+        // p1 vs p2
+        final s1 = stats[p1]!;
+        final h2h1 = s1.vsStats.putIfAbsent(p2,
+            () => HeadToHead(opponentId: p2, opponentName: stats[p2]!.playerName));
+        h2h1.matchesPlayed++;
+        if (t1Won) {
+          h2h1.wins++;
+        } else {
+          h2h1.losses++;
+        }
+
+        // p2 vs p1
+        final s2 = stats[p2]!;
+        final h2h2 = s2.vsStats.putIfAbsent(p1,
+            () => HeadToHead(opponentId: p1, opponentName: stats[p1]!.playerName));
+        h2h2.matchesPlayed++;
+        if (!t1Won) {
+          h2h2.wins++;
+        } else {
+          h2h2.losses++;
+        }
       }
     }
   }

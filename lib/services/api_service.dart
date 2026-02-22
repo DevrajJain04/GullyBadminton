@@ -74,6 +74,23 @@ class ApiService {
     return jsonDecode(res.body);
   }
 
+  Future<Map<String, dynamic>> addAdmin(String groupId, String userId) async {
+    final res = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/groups/$groupId/admins'),
+      headers: _headers,
+      body: jsonEncode({'user_id': userId}),
+    );
+    return jsonDecode(res.body);
+  }
+
+  Future<Map<String, dynamic>> removeAdmin(String groupId, String userId) async {
+    final res = await http.delete(
+      Uri.parse('${ApiConfig.baseUrl}/groups/$groupId/admins/$userId'),
+      headers: _headers,
+    );
+    return jsonDecode(res.body);
+  }
+
   // ---------- Players ----------
 
   Future<Map<String, dynamic>> createPlayer(String groupId, String name) async {

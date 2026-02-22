@@ -5,13 +5,13 @@ import '../providers/match_provider.dart';
 
 class MatchCard extends StatelessWidget {
   final Match match;
-  final bool isCreator;
+  final bool isAdmin;
   final VoidCallback? onTap;
 
   const MatchCard({
     super.key,
     required this.match,
-    this.isCreator = false,
+    this.isAdmin = false,
     this.onTap,
   });
 
@@ -64,7 +64,7 @@ class MatchCard extends StatelessWidget {
                               color: Colors.blue,
                               fontWeight: FontWeight.bold)),
                     ),
-                  if (isCreator)
+                  if (isAdmin)
                     PopupMenuButton<String>(
                       onSelected: (action) {
                         if (action == 'delete') {
@@ -90,19 +90,12 @@ class MatchCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Expanded(
-                    child: Column(
-                      children: [
-                        Text(match.team1Label,
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 14, fontWeight: FontWeight.w500)),
-                        const SizedBox(height: 4),
-                        Text('${match.score1}',
-                            style: const TextStyle(
-                                fontSize: 28, fontWeight: FontWeight.bold)),
-                      ],
+                    child: _buildTeamBlock(
+                      label: match.team1Label,
+                      score: match.score1,
+                      isWinner: !isLive && match.score1 > match.score2,
+                      isLoser: !isLive && match.score1 < match.score2,
+                      isFinished: !isLive,
                     ),
                   ),
                   const Padding(
@@ -111,19 +104,12 @@ class MatchCard extends StatelessWidget {
                         style: TextStyle(fontSize: 16, color: Colors.grey)),
                   ),
                   Expanded(
-                    child: Column(
-                      children: [
-                        Text(match.team2Label,
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 14, fontWeight: FontWeight.w500)),
-                        const SizedBox(height: 4),
-                        Text('${match.score2}',
-                            style: const TextStyle(
-                                fontSize: 28, fontWeight: FontWeight.bold)),
-                      ],
+                    child: _buildTeamBlock(
+                      label: match.team2Label,
+                      score: match.score2,
+                      isWinner: !isLive && match.score2 > match.score1,
+                      isLoser: !isLive && match.score2 < match.score1,
+                      isFinished: !isLive,
                     ),
                   ),
                 ],
@@ -173,6 +159,66 @@ class MatchCard extends StatelessWidget {
               Navigator.pop(ctx);
             },
             child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTeamBlock({
+    required String label,
+    required int score,
+    required bool isWinner,
+    required bool isLoser,
+    required bool isFinished,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        gradient: isWinner
+            ? LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.greenAccent.withValues(alpha: 0.15),
+                  Colors.transparent,
+                ],
+              )
+            : isLoser
+                ? LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.redAccent.withValues(alpha: 0.05),
+                      Colors.transparent,
+                    ],
+                  )
+                : null,
+      ),
+      child: Column(
+        children: [
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: isWinner ? FontWeight.bold : FontWeight.w500,
+              color: isFinished && isLoser ? Colors.grey : Colors.white,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$score',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: isWinner
+                  ? Colors.greenAccent
+                  : (isFinished && isLoser ? Colors.grey : Colors.white),
+            ),
           ),
         ],
       ),
