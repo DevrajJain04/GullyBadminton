@@ -66,4 +66,31 @@ class PlayerProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  Future<bool> mergePlayers(
+      String groupId, String targetPlayerId, String sourcePlayerId) async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final data =
+          await _api.mergePlayers(groupId, targetPlayerId, sourcePlayerId);
+      if (data.containsKey('error')) {
+        _error = data['error'];
+        _loading = false;
+        notifyListeners();
+        return false;
+      }
+      // Remove the source player locally since they've been deleted on backend
+      _players.removeWhere((p) => p.id == sourcePlayerId);
+      _loading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
+  }
 }

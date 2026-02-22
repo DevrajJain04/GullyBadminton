@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/player.dart';
 import '../models/player_stats.dart';
 import '../providers/player_provider.dart';
 import '../providers/group_provider.dart';
@@ -100,8 +101,15 @@ class PlayersTab extends StatelessWidget {
                             ],
                           ),
                         ),
-                        // Delete button (creator only)
-                        if (isCreator)
+                        // Delete / Merge buttons (creator only)
+                        if (isCreator) ...[
+                          IconButton(
+                            icon: Icon(Icons.merge_type,
+                                color: const Color(0xFF00D9FF).withValues(alpha: 0.8),
+                                size: 20),
+                            onPressed: () => _showMergeDialog(
+                                context, playerProv, matchProv, group!.id, player),
+                          ),
                           IconButton(
                             icon: Icon(Icons.delete_outline,
                                 color: Colors.redAccent.withValues(alpha: 0.6),
@@ -110,6 +118,7 @@ class PlayersTab extends StatelessWidget {
                                 context, playerProv, group!.id, player.id,
                                 player.name),
                           ),
+                        ],
                       ],
                     ),
                   );
@@ -170,6 +179,110 @@ class PlayersTab extends StatelessWidget {
             child: const Text('Remove'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showMergeDialog(BuildContext context, PlayerProvider playerProv,
+      MatchProvider matchProv, String groupId, Player sourcePlayer) {
+    // Filter out the source player from the target list
+    final availableTargets =
+        playerProv.players.where((p) => p.id != sourcePlayer.id).toList();
+
+    if (availableTargets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('No other players available to merge into.'),
+        backgroundColor: Colors.redAccent,
+      ));
+      return;
+    }
+
+    String? selectedTargetId;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF16213E),
+            title: const Text('Transfer Stats',
+                style: TextStyle(color: Colors.white)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Transfer all of ${sourcePlayer.name}\'s match history and stats to another player. ${sourcePlayer.name} will be removed.',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  dropdownColor: const Color(0xFF1A1A2E),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Select Registered User',
+                    labelStyle: const TextStyle(color: Colors.white54),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.2)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Color(0xFF00D9FF)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  // ignore: deprecated_member_use
+                  value: selectedTargetId,
+                  items: availableTargets.map((p) {
+                    return DropdownMenuItem(
+                      value: p.id,
+                      child: Text(p.name),
+                    );
+                  }).toList(),
+                  onChanged: (val) => setState(() => selectedTargetId = val),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel',
+                      style: TextStyle(color: Colors.white54))),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00D9FF),
+                  foregroundColor: const Color(0xFF1A1A2E),
+                ),
+                onPressed: selectedTargetId == null
+                    ? null
+                    : () async {
+                        Navigator.pop(ctx);
+                        final success = await playerProv.mergePlayers(
+                            groupId, selectedTargetId!, sourcePlayer.id);
+                        if (success && context.mounted) {
+                          // Refresh matches to reflect the new IDs in history
+                          matchProv.loadMatches(groupId);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Stats transferred successfully!'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        } else if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(playerProv.error ?? 'Merge failed'),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                        }
+                      },
+                child: const Text('Confirm Transfer'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
