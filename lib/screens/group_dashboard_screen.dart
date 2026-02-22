@@ -5,6 +5,8 @@ import '../providers/group_provider.dart';
 import '../providers/match_provider.dart';
 import '../providers/player_provider.dart';
 import '../widgets/match_card.dart';
+import '../widgets/leaderboard_tab.dart';
+import '../widgets/players_tab.dart';
 
 class GroupDashboardScreen extends StatefulWidget {
   const GroupDashboardScreen({super.key});
@@ -14,26 +16,30 @@ class GroupDashboardScreen extends StatefulWidget {
 }
 
 class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
+  bool _loaded = false;
+  int _tabIndex = 0;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final group = context.read<GroupProvider>().selectedGroup;
-    if (group != null) {
-      context.read<MatchProvider>().loadMatches(group.id);
-      context.read<MatchProvider>().connectWebSocket(group.id);
-      context.read<PlayerProvider>().loadPlayers(group.id);
+    if (!_loaded) {
+      _loaded = true;
+      final group = context.read<GroupProvider>().selectedGroup;
+      if (group != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          context.read<MatchProvider>().loadMatches(group.id);
+          context.read<MatchProvider>().connectWebSocket(group.id);
+          context.read<PlayerProvider>().loadPlayers(group.id);
+        });
+      }
     }
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final group = context.watch<GroupProvider>().selectedGroup;
     final matchProvider = context.watch<MatchProvider>();
+    final playerProvider = context.watch<PlayerProvider>();
     final auth = context.watch<AuthProvider>();
     final isCreator = group?.createdBy == auth.user?.id;
 
@@ -45,102 +51,87 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
       appBar: AppBar(
         title: Text(group.name),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.people),
-            onPressed: () => Navigator.pushNamed(context, '/players'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.history),
-            onPressed: () => Navigator.pushNamed(context, '/match-history'),
+          // Join code chip
+          Container(
+            margin: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.key, size: 14,
+                    color: Colors.white.withValues(alpha: 0.5)),
+                const SizedBox(width: 4),
+                Text(group.joinCode,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2)),
+              ],
+            ),
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () => matchProvider.loadMatches(group.id),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // Join code card
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Join Code',
-                            style: Theme.of(context).textTheme.labelMedium),
-                        Text(group.joinCode,
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    Text('${group.members.length} members',
-                        style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
-              ),
-            ),
+      body: IndexedStack(
+        index: _tabIndex,
+        children: [
+          // ── Tab 0: Matches ──
+          _matchesTab(context, matchProvider, isCreator, group.id),
 
-            const SizedBox(height: 16),
+          // ── Tab 1: Leaderboard ──
+          LeaderboardTab(
+            matches: matchProvider.matches,
+            players: playerProvider.players,
+          ),
 
-            // Live matches
-            if (matchProvider.liveMatches.isNotEmpty) ...[
-              Text('🔴 Live Matches',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              ...matchProvider.liveMatches.map((m) => MatchCard(
-                    match: m,
-                    isCreator: isCreator,
-                    onTap: () {
-                      matchProvider.setCurrentMatch(m);
-                      Navigator.pushNamed(context, '/live-match');
-                    },
-                  )),
-              const SizedBox(height: 16),
-            ],
-
-            // Recent finished matches
-            if (matchProvider.finishedMatches.isNotEmpty) ...[
-              Text('Recent Matches',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              ...matchProvider.finishedMatches.take(5).map((m) => MatchCard(
-                    match: m,
-                    isCreator: isCreator,
-                    onTap: () {
-                      matchProvider.setCurrentMatch(m);
-                      Navigator.pushNamed(context, '/live-match');
-                    },
-                  )),
-            ],
-
-            if (matchProvider.loading)
-              const Center(child: CircularProgressIndicator()),
-
-            if (!matchProvider.loading &&
-                matchProvider.matches.isEmpty)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Text('No matches yet. Start one!',
-                      textAlign: TextAlign.center),
-                ),
-              ),
-          ],
-        ),
+          // ── Tab 2: Players ──
+          const PlayersTab(),
+        ],
       ),
-      floatingActionButton: isCreator
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tabIndex,
+        onDestinationSelected: (i) => setState(() => _tabIndex = i),
+        height: 64,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        destinations: [
+          NavigationDestination(
+            icon: Badge(
+              isLabelVisible: matchProvider.liveMatches.isNotEmpty,
+              label: Text('${matchProvider.liveMatches.length}'),
+              child: const Icon(Icons.sports),
+            ),
+            selectedIcon: Badge(
+              isLabelVisible: matchProvider.liveMatches.isNotEmpty,
+              label: Text('${matchProvider.liveMatches.length}'),
+              child: const Icon(Icons.sports),
+            ),
+            label: 'Matches',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.leaderboard_outlined),
+            selectedIcon: Icon(Icons.leaderboard),
+            label: 'Leaderboard',
+          ),
+          NavigationDestination(
+            icon: Badge(
+              isLabelVisible: playerProvider.players.isNotEmpty,
+              label: Text('${playerProvider.players.length}'),
+              child: const Icon(Icons.people_outline),
+            ),
+            selectedIcon: Badge(
+              isLabelVisible: playerProvider.players.isNotEmpty,
+              label: Text('${playerProvider.players.length}'),
+              child: const Icon(Icons.people),
+            ),
+            label: 'Players',
+          ),
+        ],
+      ),
+      floatingActionButton: _tabIndex == 0 && isCreator
           ? Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -153,7 +144,8 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                 const SizedBox(height: 8),
                 FloatingActionButton.small(
                   heroTag: 'add_result',
-                  onPressed: () => Navigator.pushNamed(context, '/add-result'),
+                  onPressed: () =>
+                      Navigator.pushNamed(context, '/add-result'),
                   child: const Icon(Icons.add_chart),
                 ),
               ],
@@ -162,6 +154,79 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
     );
   }
 
+  // ── Matches Tab Content ──
+  Widget _matchesTab(BuildContext context, MatchProvider matchProvider,
+      bool isCreator, String groupId) {
+    return RefreshIndicator(
+      onRefresh: () => matchProvider.loadMatches(groupId),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Live matches
+          if (matchProvider.liveMatches.isNotEmpty) ...[
+            _sectionHeader(context, '🔴 Live Matches'),
+            const SizedBox(height: 8),
+            ...matchProvider.liveMatches.map((m) => MatchCard(
+                  match: m,
+                  isCreator: isCreator,
+                  onTap: () {
+                    matchProvider.setCurrentMatch(m);
+                    Navigator.pushNamed(context, '/live-match');
+                  },
+                )),
+            const SizedBox(height: 16),
+          ],
+
+          // Recent finished
+          if (matchProvider.finishedMatches.isNotEmpty) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _sectionHeader(context, 'Recent Matches'),
+                TextButton(
+                  onPressed: () =>
+                      Navigator.pushNamed(context, '/match-history'),
+                  child: const Text('See all',
+                      style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ...matchProvider.finishedMatches.take(5).map((m) => MatchCard(
+                  match: m,
+                  isCreator: isCreator,
+                  onTap: () {
+                    matchProvider.setCurrentMatch(m);
+                    Navigator.pushNamed(context, '/live-match');
+                  },
+                )),
+          ],
+
+          if (matchProvider.loading)
+            const Center(child: CircularProgressIndicator()),
+
+          if (!matchProvider.loading && matchProvider.matches.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: Text('No matches yet. Start one!',
+                    textAlign: TextAlign.center),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionHeader(BuildContext context, String text) {
+    return Text(text,
+        style: Theme.of(context)
+            .textTheme
+            .titleMedium
+            ?.copyWith(fontWeight: FontWeight.bold));
+  }
+
+  // ── New Match Dialog ──
   void _showNewMatchDialog(BuildContext context) {
     final players = context.read<PlayerProvider>().players;
     if (players.isEmpty) {
@@ -170,7 +235,6 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
       return;
     }
 
-    // State for team building
     String? t1p1, t1p2, t2p1, t2p2;
     bool t1HasPartner = false;
     bool t2HasPartner = false;
@@ -179,15 +243,15 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          // Get all currently selected IDs to exclude from other dropdowns
-          final selectedIds = [t1p1, t1p2, t2p1, t2p2]
-              .where((e) => e != null)
-              .toSet();
+          final selectedIds =
+              [t1p1, t1p2, t2p1, t2p2].where((e) => e != null).toSet();
 
           Widget playerDropdown(String label, String? value,
               ValueChanged<String?> onChanged) {
-            final availablePlayers = players.where(
-                (p) => value == p.id || !selectedIds.contains(p.id)).toList();
+            final available = players
+                .where(
+                    (p) => value == p.id || !selectedIds.contains(p.id))
+                .toList();
             return DropdownButtonFormField<String>(
               initialValue: value,
               decoration: InputDecoration(
@@ -196,8 +260,9 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                 isDense: true,
               ),
               items: [
-                const DropdownMenuItem(value: null, child: Text('Select...')),
-                ...availablePlayers.map((p) => DropdownMenuItem(
+                const DropdownMenuItem(
+                    value: null, child: Text('Select...')),
+                ...available.map((p) => DropdownMenuItem(
                       value: p.id,
                       child: Text(p.name),
                     )),
@@ -216,66 +281,54 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Team 1
                   Text('Team 1',
                       style: Theme.of(ctx).textTheme.titleSmall),
                   const SizedBox(height: 8),
                   playerDropdown('Player 1', t1p1, (v) => t1p1 = v),
                   if (t1HasPartner) ...[
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
+                    Row(children: [
+                      Expanded(
                           child: playerDropdown(
-                              'Partner', t1p2, (v) => t1p2 = v),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () => setDialogState(() {
-                            t1HasPartner = false;
-                            t1p2 = null;
-                          }),
-                        ),
-                      ],
-                    ),
+                              'Partner', t1p2, (v) => t1p2 = v)),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () => setDialogState(() {
+                          t1HasPartner = false;
+                          t1p2 = null;
+                        }),
+                      ),
+                    ]),
                   ] else
                     TextButton.icon(
-                      onPressed: () => setDialogState(() {
-                        t1HasPartner = true;
-                      }),
+                      onPressed: () =>
+                          setDialogState(() => t1HasPartner = true),
                       icon: const Icon(Icons.person_add, size: 16),
                       label: const Text('Add Partner'),
                     ),
-
                   const Divider(height: 24),
-
-                  // Team 2
                   Text('Team 2',
                       style: Theme.of(ctx).textTheme.titleSmall),
                   const SizedBox(height: 8),
                   playerDropdown('Player 1', t2p1, (v) => t2p1 = v),
                   if (t2HasPartner) ...[
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
+                    Row(children: [
+                      Expanded(
                           child: playerDropdown(
-                              'Partner', t2p2, (v) => t2p2 = v),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () => setDialogState(() {
-                            t2HasPartner = false;
-                            t2p2 = null;
-                          }),
-                        ),
-                      ],
-                    ),
+                              'Partner', t2p2, (v) => t2p2 = v)),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: () => setDialogState(() {
+                          t2HasPartner = false;
+                          t2p2 = null;
+                        }),
+                      ),
+                    ]),
                   ] else
                     TextButton.icon(
-                      onPressed: () => setDialogState(() {
-                        t2HasPartner = true;
-                      }),
+                      onPressed: () =>
+                          setDialogState(() => t2HasPartner = true),
                       icon: const Icon(Icons.person_add, size: 16),
                       label: const Text('Add Partner'),
                     ),
@@ -284,14 +337,14 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
-              ),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel')),
               FilledButton(
                 onPressed: () {
                   if (t1p1 == null || t2p1 == null) {
                     ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                        content: Text('Select at least 1 player per team')));
+                        content:
+                            Text('Select at least 1 player per team')));
                     return;
                   }
                   final team1 = [t1p1!, ?t1p2];

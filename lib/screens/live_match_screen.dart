@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/match.dart';
 import '../providers/match_provider.dart';
+import '../widgets/court_widget.dart';
 
 class LiveMatchScreen extends StatefulWidget {
   const LiveMatchScreen({super.key});
@@ -92,25 +93,31 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
               ),
             ),
 
-          // Serve indicator
-          if (isLive && match.servingTeam > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+          // Court position diagram
+          if (isLive && match.servingTeam > 0) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.sports_tennis, size: 16, color: Colors.amber),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Serve: ${_getServerName(match)}',
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w500),
-                  ),
+                  const Expanded(
+                      child: Center(
+                          child: Text('LEFT',
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.white38,
+                                  letterSpacing: 2)))),
+                  const Expanded(
+                      child: Center(
+                          child: Text('RIGHT',
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.white38,
+                                  letterSpacing: 2)))),
                 ],
               ),
             ),
-
-          const SizedBox(height: 8),
+            CourtWidget(match: match),
+          ],
 
           // Scoreboard
           _buildScoreboard(match),
@@ -319,11 +326,6 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
         );
       },
     );
-  }
-
-  String _getServerName(Match match) {
-    final serverId = match.servingPlayerId;
-    return _findPlayerNameById(match, serverId);
   }
 
   String _resolvePlayerName(Match match, ScoreEvent event) {

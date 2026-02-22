@@ -1,6 +1,6 @@
 {
-    "name": "gully_badminton",
-    "short_name": "gully_badminton",
+    "name": "Gully Badminton",
+    "short_name": "Gully Badminton",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

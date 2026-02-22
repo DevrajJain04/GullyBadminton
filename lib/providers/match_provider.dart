@@ -100,7 +100,7 @@ class MatchProvider extends ChangeNotifier {
         return false;
       }
       final match = Match.fromJson(data['match']);
-      _matches.insert(0, match);
+      _updateMatchInList(match);
       _currentMatch = match;
       _loading = false;
       notifyListeners();
@@ -129,7 +129,7 @@ class MatchProvider extends ChangeNotifier {
         return false;
       }
       final match = Match.fromJson(data['match']);
-      _matches.insert(0, match);
+      _updateMatchInList(match);
       _loading = false;
       notifyListeners();
       return true;
