@@ -86,7 +86,15 @@ class _BadmintonState {
 /// for positions or serve tracking.
 class CourtWidget extends StatelessWidget {
   final Match match;
-  const CourtWidget({super.key, required this.match});
+  final void Function(String draggedId, String droppedId)? onPlayerSwap;
+  final void Function(String playerId)? onPlayerTap;
+
+  const CourtWidget({
+    super.key,
+    required this.match,
+    this.onPlayerSwap,
+    this.onPlayerTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -170,15 +178,16 @@ class CourtWidget extends StatelessWidget {
   }) {
     if (names.isEmpty) return _CourtSlots();
 
-    // Singles — same mirroring as doubles
     if (names.length == 1) {
       final isEven = teamScore % 2 == 0;
       // Team 1: even→LEFT, Team 2: even→RIGHT
       final onRight = teamNumber == 1 ? !isEven : isEven;
       final isServer = isServingTeam;
       return _CourtSlots(
-        leftPlayer: onRight ? null : names[0],
-        rightPlayer: onRight ? names[0] : null,
+        leftPlayerName: onRight ? null : names[0],
+        leftPlayerId: onRight ? null : ids[0],
+        rightPlayerName: onRight ? names[0] : null,
+        rightPlayerId: onRight ? ids[0] : null,
         leftIsServer: !onRight && isServer,
         rightIsServer: onRight && isServer,
       );
@@ -189,8 +198,10 @@ class CourtWidget extends StatelessWidget {
     final rightName = _nameForId(positions[1], ids, names);
 
     return _CourtSlots(
-      leftPlayer: leftName,
-      rightPlayer: rightName,
+      leftPlayerName: leftName,
+      leftPlayerId: positions[0],
+      rightPlayerName: rightName,
+      rightPlayerId: positions[1],
       leftIsServer: isServingTeam && positions[0] == serverId,
       rightIsServer: isServingTeam && positions[1] == serverId,
     );
@@ -214,7 +225,8 @@ class CourtWidget extends StatelessWidget {
         children: [
           Expanded(
             child: _courtCell(
-              slots.leftPlayer,
+              slots.leftPlayerName,
+              slots.leftPlayerId,
               teamColor,
               isServer: slots.leftIsServer,
               serveDirection: isServingSide && slots.leftIsServer
@@ -225,7 +237,8 @@ class CourtWidget extends StatelessWidget {
           Container(width: 1, color: Colors.white24),
           Expanded(
             child: _courtCell(
-              slots.rightPlayer,
+              slots.rightPlayerName,
+              slots.rightPlayerId,
               teamColor,
               isServer: slots.rightIsServer,
               serveDirection: isServingSide && slots.rightIsServer
@@ -240,6 +253,7 @@ class CourtWidget extends StatelessWidget {
 
   Widget _courtCell(
     String? playerName,
+    String? playerId,
     Color teamColor, {
     required bool isServer,
     _ServeDir? serveDirection,
@@ -248,7 +262,7 @@ class CourtWidget extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return Stack(
+    Widget cell = Stack(
       alignment: Alignment.center,
       children: [
         if (serveDirection != null)
@@ -318,20 +332,58 @@ class CourtWidget extends StatelessWidget {
         ),
       ],
     );
+
+    if (onPlayerSwap != null && playerId != null) {
+      cell = GestureDetector(
+        onTap: onPlayerTap != null ? () => onPlayerTap!(playerId) : null,
+        child: DragTarget<String>(
+          onAcceptWithDetails: (details) {
+            if (details.data != playerId) {
+              onPlayerSwap!(details.data, playerId);
+            }
+          },
+          builder: (context, candidateData, rejectedData) {
+            return Draggable<String>(
+              data: playerId,
+              feedback: Material(
+                color: Colors.transparent,
+                child: Opacity(opacity: 0.8, child: SizedBox(width: 80, child: cell)),
+              ),
+              childWhenDragging: Opacity(opacity: 0.3, child: cell),
+              child: Container(
+                foregroundDecoration: candidateData.isNotEmpty
+                    ? BoxDecoration(
+                        color: Colors.white.withAlpha(50),
+                        borderRadius: BorderRadius.circular(8),
+                      )
+                    : null,
+                child: cell,
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    return cell;
   }
 }
 
 enum _ServeDir { downLeft, downRight, upLeft, upRight }
 
 class _CourtSlots {
-  final String? leftPlayer;
-  final String? rightPlayer;
+  final String? leftPlayerName;
+  final String? leftPlayerId;
+  final String? rightPlayerName;
+  final String? rightPlayerId;
   final bool leftIsServer;
   final bool rightIsServer;
 
   _CourtSlots({
-    this.leftPlayer,
-    this.rightPlayer,
+    this.leftPlayerName,
+    this.leftPlayerId,
+    this.rightPlayerName,
+    this.rightPlayerId,
     this.leftIsServer = false,
     this.rightIsServer = false,
   });

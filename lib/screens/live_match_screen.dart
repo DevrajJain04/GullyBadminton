@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/match.dart';
 import '../providers/match_provider.dart';
+import '../providers/group_provider.dart';
+import '../providers/auth_provider.dart';
 import '../widgets/court_widget.dart';
 
 class LiveMatchScreen extends StatefulWidget {
@@ -46,6 +48,7 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   @override
   Widget build(BuildContext context) {
     final matchProvider = context.watch<MatchProvider>();
+    final groupProvider = context.read<GroupProvider>();
     final match = matchProvider.currentMatch;
 
     if (match == null) {
@@ -53,6 +56,17 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
     }
 
     final isLive = match.isLive;
+    final group = groupProvider.selectedGroup;
+    final userId = context.read<AuthProvider>().user?.id;
+    final isAdmin = group != null &&
+        userId != null &&
+        (group.createdBy == userId || group.admins.contains(userId));
+
+    final canSetup = isLive &&
+        isAdmin &&
+        match.score1 == 0 &&
+        match.score2 == 0 &&
+        match.scoreHistory.isEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -116,7 +130,45 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
                 ],
               ),
             ),
-            CourtWidget(match: match),
+            CourtWidget(
+              match: match,
+              onPlayerSwap: canSetup
+                  ? (draggedId, droppedId) {
+                      final newT1 = List<String>.from(match.team1Ids);
+                      final newT2 = List<String>.from(match.team2Ids);
+
+                      final idx1t1 = newT1.indexOf(draggedId);
+                      final idx1t2 = newT2.indexOf(draggedId);
+                      final idx2t1 = newT1.indexOf(droppedId);
+                      final idx2t2 = newT2.indexOf(droppedId);
+
+                      if (idx1t1 != -1 && idx2t1 != -1) {
+                        newT1[idx1t1] = droppedId;
+                        newT1[idx2t1] = draggedId;
+                      } else if (idx1t2 != -1 && idx2t2 != -1) {
+                        newT2[idx1t2] = droppedId;
+                        newT2[idx2t2] = draggedId;
+                      } else if (idx1t1 != -1 && idx2t2 != -1) {
+                        newT1[idx1t1] = droppedId;
+                        newT2[idx2t2] = draggedId;
+                      } else if (idx1t2 != -1 && idx2t1 != -1) {
+                        newT2[idx1t2] = droppedId;
+                        newT1[idx2t1] = draggedId;
+                      }
+
+                      matchProvider.setupMatch(match.id,
+                          team1Ids: newT1, team2Ids: newT2);
+                    }
+                  : null,
+              onPlayerTap: canSetup
+                  ? (playerId) {
+                      final isTeam1 = match.team1Ids.contains(playerId);
+                      matchProvider.setupMatch(match.id,
+                          servingTeam: isTeam1 ? 1 : 2,
+                          servingPlayerId: playerId);
+                    }
+                  : null,
+            ),
           ],
 
           // Scoreboard

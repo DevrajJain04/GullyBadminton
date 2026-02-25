@@ -7,12 +7,14 @@ class MatchCard extends StatelessWidget {
   final Match match;
   final bool isAdmin;
   final VoidCallback? onTap;
+  final VoidCallback? onRematch;
 
   const MatchCard({
     super.key,
     required this.match,
     this.isAdmin = false,
     this.onTap,
+    this.onRematch,
   });
 
   @override
@@ -64,22 +66,39 @@ class MatchCard extends StatelessWidget {
                               color: Colors.blue,
                               fontWeight: FontWeight.bold)),
                     ),
-                  if (isAdmin)
+                  if (isAdmin || onRematch != null)
                     PopupMenuButton<String>(
                       onSelected: (action) {
                         if (action == 'delete') {
                           context.read<MatchProvider>().deleteMatch(match.id);
                         } else if (action == 'edit') {
                           _showEditScoreDialog(context);
+                        } else if (action == 'rematch') {
+                          onRematch?.call();
                         }
                       },
                       itemBuilder: (_) => [
-                        const PopupMenuItem(
-                            value: 'edit', child: Text('Edit Score')),
-                        const PopupMenuItem(
-                            value: 'delete',
-                            child: Text('Delete',
-                                style: TextStyle(color: Colors.red))),
+                        if (onRematch != null && !isLive) ...[
+                          const PopupMenuItem(
+                            value: 'rematch',
+                            child: Row(
+                              children: [
+                                Icon(Icons.replay, size: 20),
+                                SizedBox(width: 8),
+                                Text('Rematch'),
+                              ],
+                            ),
+                          ),
+                          if (isAdmin) const PopupMenuDivider(),
+                        ],
+                        if (isAdmin) ...[
+                          const PopupMenuItem(
+                              value: 'edit', child: Text('Edit Score')),
+                          const PopupMenuItem(
+                              value: 'delete',
+                              child: Text('Delete',
+                                  style: TextStyle(color: Colors.red))),
+                        ],
                       ],
                     ),
                 ],

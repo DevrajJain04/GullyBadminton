@@ -215,6 +215,8 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                     matchProvider.setCurrentMatch(m);
                     Navigator.pushNamed(context, '/live-match');
                   },
+                  onRematch: () =>
+                      _showNewMatchDialog(context, rematchFrom: m),
                 )),
             const SizedBox(height: 16),
           ],
@@ -230,6 +232,8 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                     matchProvider.setCurrentMatch(m);
                     Navigator.pushNamed(context, '/live-match');
                   },
+                  onRematch: () =>
+                      _showNewMatchDialog(context, rematchFrom: m),
                 )),
           ],
 
@@ -258,7 +262,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
   }
 
   // ── New Match Dialog ──
-  void _showNewMatchDialog(BuildContext context) {
+  void _showNewMatchDialog(BuildContext context, {Match? rematchFrom}) {
     final players = context.read<PlayerProvider>().players;
     if (players.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -266,9 +270,16 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
       return;
     }
 
-    String? t1p1, t1p2, t2p1, t2p2;
-    bool t1HasPartner = false;
-    bool t2HasPartner = false;
+    String? t1p1 = rematchFrom?.team1Ids.isNotEmpty == true
+        ? rematchFrom!.team1Ids[0]
+        : null;
+    String? t1p2 =
+        rematchFrom?.team1Ids.length == 2 ? rematchFrom!.team1Ids[1] : null;
+    String? t2p1 = rematchFrom?.team2Ids.isNotEmpty == true
+        ? rematchFrom!.team2Ids[0]
+        : null;
+    String? t2p2 =
+        rematchFrom?.team2Ids.length == 2 ? rematchFrom!.team2Ids[1] : null;
 
     showDialog(
       context: context,
@@ -306,7 +317,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
           }
 
           return AlertDialog(
-            title: const Text('New Match'),
+            title: Text(rematchFrom == null ? 'New Match' : 'Rematch'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -316,53 +327,15 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                       style: Theme.of(ctx).textTheme.titleSmall),
                   const SizedBox(height: 8),
                   playerDropdown('Player 1', t1p1, (v) => t1p1 = v),
-                  if (t1HasPartner) ...[
-                    const SizedBox(height: 8),
-                    Row(children: [
-                      Expanded(
-                          child: playerDropdown(
-                              'Partner', t1p2, (v) => t1p2 = v)),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        onPressed: () => setDialogState(() {
-                          t1HasPartner = false;
-                          t1p2 = null;
-                        }),
-                      ),
-                    ]),
-                  ] else
-                    TextButton.icon(
-                      onPressed: () =>
-                          setDialogState(() => t1HasPartner = true),
-                      icon: const Icon(Icons.person_add, size: 16),
-                      label: const Text('Add Partner'),
-                    ),
+                  const SizedBox(height: 8),
+                  playerDropdown('Player 2 (Optional)', t1p2, (v) => t1p2 = v),
                   const Divider(height: 24),
                   Text('Team 2',
                       style: Theme.of(ctx).textTheme.titleSmall),
                   const SizedBox(height: 8),
                   playerDropdown('Player 1', t2p1, (v) => t2p1 = v),
-                  if (t2HasPartner) ...[
-                    const SizedBox(height: 8),
-                    Row(children: [
-                      Expanded(
-                          child: playerDropdown(
-                              'Partner', t2p2, (v) => t2p2 = v)),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        onPressed: () => setDialogState(() {
-                          t2HasPartner = false;
-                          t2p2 = null;
-                        }),
-                      ),
-                    ]),
-                  ] else
-                    TextButton.icon(
-                      onPressed: () =>
-                          setDialogState(() => t2HasPartner = true),
-                      icon: const Icon(Icons.person_add, size: 16),
-                      label: const Text('Add Partner'),
-                    ),
+                  const SizedBox(height: 8),
+                  playerDropdown('Player 2 (Optional)', t2p2, (v) => t2p2 = v),
                 ],
               ),
             ),

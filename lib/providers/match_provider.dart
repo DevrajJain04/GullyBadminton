@@ -141,6 +141,34 @@ class MatchProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> setupMatch(String matchId,
+      {List<String>? team1Ids,
+      List<String>? team2Ids,
+      int? servingTeam,
+      String? servingPlayerId}) async {
+    try {
+      final data = await _api.setupMatch(matchId,
+          team1Ids: team1Ids,
+          team2Ids: team2Ids,
+          servingTeam: servingTeam,
+          servingPlayerId: servingPlayerId);
+      if (data.containsKey('error')) {
+        _error = data['error'];
+        notifyListeners();
+        return false;
+      }
+      final updated = Match.fromJson(data['match']);
+      _updateMatchInList(updated);
+      if (_currentMatch?.id == matchId) _currentMatch = updated;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
   void setCurrentMatch(Match match) {
     _currentMatch = match;
     notifyListeners();

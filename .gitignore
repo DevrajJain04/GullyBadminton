@@ -25,7 +25,8 @@ Thumbs.db
 **/android/app/profile/
 **/android/app/release/
 **/android/local.properties
-
+test_failure.log
+test_out.txt
 # iOS
 **/ios/Pods/
 **/ios/.symlinks/

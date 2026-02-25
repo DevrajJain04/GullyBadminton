@@ -147,6 +147,25 @@ class ApiService {
     return jsonDecode(res.body);
   }
 
+  Future<Map<String, dynamic>> setupMatch(String matchId,
+      {List<String>? team1Ids,
+      List<String>? team2Ids,
+      int? servingTeam,
+      String? servingPlayerId}) async {
+    final body = <String, dynamic>{};
+    if (team1Ids != null) body['team1_ids'] = team1Ids;
+    if (team2Ids != null) body['team2_ids'] = team2Ids;
+    if (servingTeam != null) body['serving_team'] = servingTeam;
+    if (servingPlayerId != null) body['serving_player_id'] = servingPlayerId;
+
+    final res = await http.patch(
+      Uri.parse('${ApiConfig.baseUrl}/matches/$matchId/setup'),
+      headers: _headers,
+      body: jsonEncode(body),
+    );
+    return jsonDecode(res.body);
+  }
+
   Future<Map<String, dynamic>> addResult(String groupId, List<String> team1Ids,
       List<String> team2Ids, int score1, int score2) async {
     final res = await http.post(
