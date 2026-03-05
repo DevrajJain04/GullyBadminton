@@ -5,6 +5,7 @@ import '../models/match.dart';
 import '../providers/match_provider.dart';
 import '../providers/group_provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/voice_command_service.dart';
 import '../widgets/court_widget.dart';
 
 class LiveMatchScreen extends StatefulWidget {
@@ -17,6 +18,12 @@ class LiveMatchScreen extends StatefulWidget {
 class _LiveMatchScreenState extends State<LiveMatchScreen> {
   Timer? _timer;
   Duration _elapsed = Duration.zero;
+
+  // Voice command state
+  final VoiceCommandService _voiceService = VoiceCommandService();
+  StreamSubscription<VoiceCommand>? _voiceSub;
+  bool _voiceEnabled = false;
+  String _voiceStatus = '';
 
   @override
   void initState() {
@@ -36,6 +43,10 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    // Clean up voice without setState (widget is being disposed).
+    _voiceSub?.cancel();
+    _voiceSub = null;
+    _voiceService.dispose();
     super.dispose();
   }
 
@@ -73,12 +84,21 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
         title: Text(isLive ? 'Live Match' : 'Match Details'),
         centerTitle: true,
         actions: [
-          if (isLive)
+          if (isLive) ...[
+            IconButton(
+              icon: Icon(
+                _voiceEnabled ? Icons.mic : Icons.mic_off,
+                color: _voiceEnabled ? Colors.redAccent : null,
+              ),
+              tooltip: _voiceEnabled ? 'Voice ON' : 'Voice OFF',
+              onPressed: () => _toggleVoice(context),
+            ),
             IconButton(
               icon: const Icon(Icons.flag),
               tooltip: 'Finish Match',
               onPressed: () => _confirmFinish(context, matchProvider),
             ),
+          ],
         ],
       ),
       body: Column(
@@ -94,6 +114,35 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
                   style: const TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w500),
                 ),
+              ),
+            ),
+
+          // Voice status chip
+          if (_voiceEnabled && isLive)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+              color: Colors.redAccent.withValues(alpha: 0.08),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.redAccent,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      _voiceStatus.isEmpty ? '🎙️ Listening...' : _voiceStatus,
+                      style: const TextStyle(fontSize: 12, color: Colors.white70),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -413,11 +462,137 @@ class _LiveMatchScreenState extends State<LiveMatchScreen> {
               provider.finishMatch();
               Navigator.pop(ctx);
               _timer?.cancel();
+              _stopVoice();
             },
             child: const Text('Finish'),
           ),
         ],
       ),
     );
+  }
+
+  // ── Voice Command Helpers ──
+
+  Future<void> _toggleVoice(BuildContext context) async {
+    if (_voiceEnabled) {
+      _stopVoice();
+    } else {
+      await _startVoice(context);
+    }
+  }
+
+  Future<void> _startVoice(BuildContext context) async {
+    print('[Voice UI] _startVoice called');
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await _voiceService.initialize();
+    print('[Voice UI] initialize returned: $ok');
+    if (!ok) {
+      if (mounted) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Speech recognition not available')),
+        );
+      }
+      return;
+    }
+    // Set match context before listening
+    final match = context.read<MatchProvider>().currentMatch;
+    _voiceService.currentMatch = match;
+    print('[Voice UI] Match context set: ${match?.id}');
+    _voiceSub = _voiceService.commands.listen(
+      (cmd) => _handleVoiceCommand(cmd),
+    );
+    await _voiceService.startListening();
+    setState(() {
+      _voiceEnabled = true;
+      _voiceStatus = '';
+    });
+    print('[Voice UI] Voice enabled, now listening');
+  }
+
+  void _stopVoice() {
+    _voiceSub?.cancel();
+    _voiceSub = null;
+    _voiceService.stopListening();
+    if (mounted) {
+      setState(() {
+        _voiceEnabled = false;
+        _voiceStatus = '';
+      });
+    }
+  }
+
+  Future<void> _handleVoiceCommand(VoiceCommand cmd) async {
+    print('[Voice UI] handleVoiceCommand: ${cmd.action} raw="${cmd.rawText}" pid=${cmd.playerId}');
+    final provider = context.read<MatchProvider>();
+    final match = provider.currentMatch;
+    if (match == null || !match.isLive) {
+      print('[Voice UI] No live match, ignoring command');
+      return;
+    }
+
+    // Keep voice service aware of current match for player resolution.
+    _voiceService.currentMatch = match;
+
+    String feedback;
+
+    switch (cmd.action) {
+      case VoiceAction.scoreTeam1:
+        final pid = cmd.playerId ?? match.team1Ids.first;
+        await provider.updateScore(1, pid);
+        if (!mounted) return;
+        final m = provider.currentMatch;
+        feedback = '${m?.score1 ?? ''} to ${m?.score2 ?? ''}';
+        break;
+
+      case VoiceAction.scoreTeam2:
+        final pid = cmd.playerId ?? match.team2Ids.first;
+        await provider.updateScore(2, pid);
+        if (!mounted) return;
+        final m = provider.currentMatch;
+        feedback = '${m?.score1 ?? ''} to ${m?.score2 ?? ''}';
+        break;
+
+      case VoiceAction.undo:
+        await provider.undoScore();
+        if (!mounted) return;
+        final m = provider.currentMatch;
+        feedback = 'Undone. ${m?.score1 ?? ''} to ${m?.score2 ?? ''}';
+        break;
+
+      case VoiceAction.finish:
+        await provider.finishMatch();
+        if (!mounted) return;
+        _timer?.cancel();
+        feedback = 'Match finished';
+        _stopVoice();
+        break;
+
+      case VoiceAction.restart:
+        await provider.restartMatch();
+        if (!mounted) return;
+        // Reset timer for new match.
+        _elapsed = Duration.zero;
+        _timer?.cancel();
+        _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+          if (mounted) {
+            setState(() => _elapsed += const Duration(seconds: 1));
+          }
+        });
+        feedback = 'New match started';
+        break;
+    }
+
+    // TTS readback.
+    await _voiceService.announce(feedback);
+
+    if (mounted) {
+      setState(() => _voiceStatus = '"${cmd.rawText}" → $feedback');
+      // Clear status after 4 seconds.
+      Future.delayed(const Duration(seconds: 4), () {
+        if (mounted && _voiceEnabled) {
+          setState(() => _voiceStatus = '');
+        }
+      });
+    }
   }
 }

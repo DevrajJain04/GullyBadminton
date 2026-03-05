@@ -252,6 +252,23 @@ class MatchProvider extends ChangeNotifier {
     }
   }
 
+  /// Finish the current match and create a new one with the same teams.
+  Future<bool> restartMatch() async {
+    if (_currentMatch == null) return false;
+    final m = _currentMatch!;
+    final groupId = m.groupId;
+    final t1 = List<String>.from(m.team1Ids);
+    final t2 = List<String>.from(m.team2Ids);
+
+    // Finish the current match first.
+    if (m.isLive) {
+      await finishMatch();
+    }
+
+    // Create a new match with the same teams.
+    return createMatch(groupId, t1, t2);
+  }
+
   @override
   void dispose() {
     disconnectWebSocket();

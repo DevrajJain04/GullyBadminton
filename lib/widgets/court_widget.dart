@@ -262,7 +262,7 @@ class CourtWidget extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    Widget cell = Stack(
+    Widget content = Stack(
       alignment: Alignment.center,
       children: [
         if (serveDirection != null)
@@ -334,7 +334,7 @@ class CourtWidget extends StatelessWidget {
     );
 
     if (onPlayerSwap != null && playerId != null) {
-      cell = GestureDetector(
+      return GestureDetector(
         onTap: onPlayerTap != null ? () => onPlayerTap!(playerId) : null,
         child: DragTarget<String>(
           onAcceptWithDetails: (details) {
@@ -347,9 +347,11 @@ class CourtWidget extends StatelessWidget {
               data: playerId,
               feedback: Material(
                 color: Colors.transparent,
-                child: Opacity(opacity: 0.8, child: SizedBox(width: 80, child: cell)),
+                child: Opacity(
+                    opacity: 0.8,
+                    child: SizedBox(width: 100, child: content)),
               ),
-              childWhenDragging: Opacity(opacity: 0.3, child: cell),
+              childWhenDragging: Opacity(opacity: 0.3, child: content),
               child: Container(
                 foregroundDecoration: candidateData.isNotEmpty
                     ? BoxDecoration(
@@ -357,7 +359,7 @@ class CourtWidget extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                       )
                     : null,
-                child: cell,
+                child: content,
               ),
             );
           },
@@ -365,7 +367,7 @@ class CourtWidget extends StatelessWidget {
       );
     }
 
-    return cell;
+    return content;
   }
 }
 
